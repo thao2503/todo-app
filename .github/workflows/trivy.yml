@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
 jobs:
   scan-code:
     name: Scan Source Code
