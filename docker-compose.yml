@@ -1,7 +1,3 @@
-# Edge nginx + Vue static + FastAPI. Postgres is included because the API requires a database.
-# Usage: docker compose up --build
-# App: http://localhost  |  API docs: http://localhost/docs
-
 name: todo
 
 services:
