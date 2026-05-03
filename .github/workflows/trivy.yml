@@ -32,25 +32,54 @@ jobs:
         with:
           sarif_file: trivy-fs.sarif
 
-  scan-image:
-    name: Scan Docker Image
+  scan-backend-image:
+    name: Scan backend Docker image
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: docker build -t my-app .
+      - name: Build backend image
+        run: docker build -t todo-backend ./backend
 
-      - name: Run Trivy Image scan (SARIF)
+      - name: Run Trivy image scan — backend (SARIF)
         uses: aquasecurity/trivy-action@0.35.0
         with:
-          image-ref: my-app
+          image-ref: todo-backend
           format: sarif
-          output: trivy-image.sarif
+          output: trivy-backend.sarif
           severity: HIGH,CRITICAL
 
-      - name: Upload Image scan result
+      - name: Upload backend image scan
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: trivy-image.sarif
+          sarif_file: trivy-backend.sarif
+          category: trivy-image-backend
+
+  scan-frontend-image:
+    name: Scan frontend Docker image
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build frontend image
+        run: |
+          docker build -t todo-frontend ./frontend \
+            --build-arg VITE_API_ENDPOINT=/api \
+            --build-arg VITE_GOOGLE_CLIENT_ID= \
+            --build-arg VITE_GA_MEASUREMENT_ID=
+
+      - name: Run Trivy image scan — frontend (SARIF)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: todo-frontend
+          format: sarif
+          output: trivy-frontend.sarif
+          severity: HIGH,CRITICAL
+
+      - name: Upload frontend image scan
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-frontend.sarif
+          category: trivy-image-frontend
