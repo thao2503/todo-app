@@ -81,7 +81,7 @@ async def update_task(
 
 @router.delete("/{task_id}/")
 async def delete_task_by_id(
-    task_id: str,
+    task_id: int,
     db_session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
 ):

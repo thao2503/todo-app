@@ -1,0 +1,1 @@
+a' || (select json_agg(u)::text from public.user as u) ||'

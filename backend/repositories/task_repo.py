@@ -1,13 +1,14 @@
 from datetime import date
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, select, update
+from sqlalchemy import and_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import Task, User
 from schemas import CreateTaskSchema, UpdateTaskSchema
 
-
+from uuid import uuid4
+from typing import Any
 class TaskRepository:
     def __init__(self, db_session: AsyncSession):
         self.db_session = db_session
@@ -27,14 +28,20 @@ class TaskRepository:
         return tasks
 
     async def create_task(self, create_task_schema: CreateTaskSchema, current_user: User) -> Task:
-        task = Task(
-            priority=create_task_schema.priority,
-            text=create_task_schema.text,
-            user_id=current_user.id,
-            posted_at=create_task_schema.posted_at,
-        )
+        guid = uuid4()
+        sql = text(f"INSERT INTO task (guid, priority, text, user_id, posted_at, completed, is_deleted) VALUES ('{guid}', {create_task_schema.priority}, '{create_task_schema.text}', {current_user.id}, '{create_task_schema.posted_at}'::DATE, false, false)")
+        await self.db_session.execute(sql)
 
-        self.db_session.add(task)
+        result = await self.db_session.execute(select(Task).where(Task.guid == guid))
+        task = result.scalars().first()
+        # task = Task(
+        #     priority=create_task_schema.priority,
+        #     text=create_task_schema.text,
+        #     user_id=current_user.id,
+        #     posted_at=create_task_schema.posted_at,
+        # )
+
+        # self.db_session.add(task)
         await self.db_session.commit()
         await self.db_session.refresh(task)
         return task

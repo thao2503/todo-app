@@ -7,6 +7,7 @@ from database import engine
 from models import metadata
 from routers import authentication, task, user
 from config import settings
+import uvicorn
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -33,3 +34,6 @@ async def create_tables() -> None:
     metadata.bind = engine
     async with engine.begin() as conn:
         await conn.run_sync(metadata.create_all)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
