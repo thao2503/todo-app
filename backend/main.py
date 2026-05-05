@@ -7,6 +7,7 @@ from database import engine
 from models import metadata
 from routers import authentication, task, user
 from config import settings
+from middleware.rate_limit import RateLimitMiddleware
 import uvicorn
 
 @asynccontextmanager
@@ -28,6 +29,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if settings.RATE_LIMIT_ENABLED:
+    app.add_middleware(
+        RateLimitMiddleware,
+        max_requests=settings.RATE_LIMIT_MAX_REQUESTS,
+        window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+    )
 
 
 async def create_tables() -> None:

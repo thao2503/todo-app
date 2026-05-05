@@ -26,6 +26,11 @@ class GlobalSettings(BaseSettings):
     # specify single database url
     DATABASE_URL: str | None = None
 
+    # Rate limiting
+    RATE_LIMIT_ENABLED: bool = False
+    RATE_LIMIT_MAX_REQUESTS: int = 100
+    RATE_LIMIT_WINDOW_SECONDS: int = 60
+
 
 class TestSettings(GlobalSettings):
     pass
