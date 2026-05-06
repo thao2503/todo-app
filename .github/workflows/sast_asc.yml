@@ -1,0 +1,335 @@
+name: Trivy Full Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  scan-code:
+    name: Scan Source Code (SCA)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy FS scan (SARIF)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs.sarif
+          severity: HIGH,CRITICAL
+
+      - name: Run Trivy FS scan (HTML)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: template
+          template: "@contrib/html.tpl"
+          output: trivy-fs.html
+          severity: HIGH,CRITICAL
+
+      - name: Upload FS scan result (SARIF)
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+      - name: Upload FS HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-trivy-fs
+          path: trivy-fs.html
+          retention-days: 30
+
+  sast-codeql-python:
+    name: SAST — CodeQL (Python)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: python
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v4
+
+      - name: Run CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: codeql-python
+          output: codeql-python.sarif
+
+      - name: Upload CodeQL Python SARIF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sarif-codeql-python
+          path: codeql-python.sarif
+          retention-days: 30
+
+  sast-codeql-javascript:
+    name: SAST — CodeQL (JavaScript)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v4
+
+      - name: Run CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: codeql-javascript
+          output: codeql-javascript.sarif
+
+      - name: Upload CodeQL JS SARIF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sarif-codeql-javascript
+          path: codeql-javascript.sarif
+          retention-days: 30
+
+  sast-semgrep:
+    name: SAST — Semgrep (Python)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Semgrep (SARIF)
+        run: |
+          semgrep scan \
+            --config p/python \
+            --config p/flask \
+            --config p/django \
+            --config p/jwt \
+            --config p/secrets \
+            --sarif \
+            --output semgrep.sarif \
+            ./backend
+
+      - name: Upload Semgrep result (SARIF)
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep-python
+
+      - name: Upload Semgrep SARIF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sarif-semgrep
+          path: semgrep.sarif
+          retention-days: 30
+
+  scan-backend-image:
+    name: Scan backend Docker image
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t todo-backend ./backend
+
+      - name: Run Trivy image scan — backend (SARIF)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: todo-backend
+          format: sarif
+          output: trivy-backend.sarif
+          severity: HIGH,CRITICAL
+
+      - name: Run Trivy image scan — backend (HTML)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: todo-backend
+          format: template
+          template: "@contrib/html.tpl"
+          output: trivy-backend.html
+          severity: HIGH,CRITICAL
+
+      - name: Upload backend SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-backend.sarif
+          category: trivy-image-backend
+
+      - name: Upload backend HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-trivy-backend
+          path: trivy-backend.html
+          retention-days: 30
+
+  scan-frontend-image:
+    name: Scan frontend Docker image
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build frontend image
+        run: |
+          docker build -t todo-frontend ./frontend \
+            --build-arg VITE_API_ENDPOINT=/api \
+            --build-arg VITE_GOOGLE_CLIENT_ID= \
+            --build-arg VITE_GA_MEASUREMENT_ID=
+
+      - name: Run Trivy image scan — frontend (SARIF)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: todo-frontend
+          format: sarif
+          output: trivy-frontend.sarif
+          severity: HIGH,CRITICAL
+
+      - name: Run Trivy image scan — frontend (HTML)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: todo-frontend
+          format: template
+          template: "@contrib/html.tpl"
+          output: trivy-frontend.html
+          severity: HIGH,CRITICAL
+
+      - name: Upload frontend SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-frontend.sarif
+          category: trivy-image-frontend
+
+      - name: Upload frontend HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-trivy-frontend
+          path: trivy-frontend.html
+          retention-days: 30
+
+  # report for FS scan (codebase) is generated in the scan-code job since it can be combined with CodeQL + Semgrep results
+  generate-report:
+    name: Generate Combined HTML Report
+    runs-on: ubuntu-latest
+    needs:
+      - scan-code
+      - sast-codeql-python
+      - sast-codeql-javascript
+      - sast-semgrep
+      - scan-backend-image
+      - scan-frontend-image
+
+    steps:
+      - name: Download all SARIF artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sarif-*
+          merge-multiple: true
+          path: sarif-files/
+
+      - name: Download all Trivy HTML reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: report-trivy-*
+          merge-multiple: true
+          path: trivy-reports/
+
+      - name: Install sarif-tools
+        run: pip install sarif-tools
+
+      - name: Convert SARIF → HTML (CodeQL + Semgrep)
+        run: |
+          sarif summary sarif-files/ --output sarif-summary.html
+
+      - name: Build combined report
+        run: |
+          cat << 'EOF' > combine.py
+          import os, glob, datetime
+
+          pages = {}
+
+          # Trivy HTML files
+          for f in glob.glob("trivy-reports/*.html"):
+            name = os.path.basename(f).replace(".html", "").replace("trivy-", "Trivy: ")
+            pages[name] = open(f).read()
+
+          # SARIF summary
+          if os.path.exists("sarif-summary.html"):
+            pages["SAST Summary (CodeQL + Semgrep)"] = open("sarif-summary.html").read()
+
+          now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
+          tabs_nav = ""
+          tabs_content = ""
+          for i, (name, content) in enumerate(pages.items()):
+            active = "active" if i == 0 else ""
+            tab_id = f"tab{i}"
+            tabs_nav += f'<button class="tab-btn {active}" onclick="showTab(\'{tab_id}\')">{name}</button>\n'
+            display = "block" if i == 0 else "none"
+            tabs_content += f'<div id="{tab_id}" class="tab-content" style="display:{display}">{content}</div>\n'
+
+          html = f"""<!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <title>Security Scan Report</title>
+            <style>
+              body {{ font-family: sans-serif; margin: 0; background: #f4f4f4; }}
+              header {{ background: #1a1a2e; color: white; padding: 20px 30px; }}
+              header h1 {{ margin: 0; font-size: 1.4rem; }}
+              header small {{ opacity: 0.6; }}
+              .tabs {{ display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 30px; background: #16213e; }}
+              .tab-btn {{ padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;
+                          background: #0f3460; color: white; font-size: 0.85rem; }}
+              .tab-btn.active {{ background: #e94560; }}
+              .tab-content {{ padding: 24px 30px; }}
+            </style>
+          </head>
+          <body>
+            <header>
+              <h1>🔐 Security Scan Report</h1>
+              <small>Generated: {now}</small>
+            </header>
+            <div class="tabs">{tabs_nav}</div>
+            {tabs_content}
+            <script>
+              function showTab(id) {{
+                document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+                document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+                document.getElementById(id).style.display = 'block';
+                event.target.classList.add('active');
+              }}
+            </script>
+          </body>
+          </html>"""
+
+          open("security-report.html", "w").write(html)
+          print("Report generated: security-report.html")
+          EOF
+          python combine.py
+
+      - name: Upload combined report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: security-report.html
+          retention-days: 30
