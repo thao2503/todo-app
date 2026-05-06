@@ -176,17 +176,17 @@ jobs:
           output: trivy-backend.sarif
           severity: HIGH,CRITICAL
 
-      - name: Run Trivy image scan — backend (HTML)
-        run: |
-          trivy image todo-backend \
-            --format template \
-            --template "@html.tpl" \
-            --output trivy-backend.html \
-            --severity HIGH,CRITICAL \
-            --skip-version-check
-          echo "=== Output ==="
-          ls -la $GITHUB_WORKSPACE/trivy-fs.html
-          head -5 $GITHUB_WORKSPACE/trivy-fs.html
+      # - name: Run Trivy image scan — backend (HTML)
+      #   run: |
+      #     trivy image todo-backend \
+      #       --format template \
+      #       --template "@html.tpl" \
+      #       --output trivy-backend.html \
+      #       --severity HIGH,CRITICAL \
+      #       --skip-version-check
+      #     echo "=== Output ==="
+      #     ls -la $GITHUB_WORKSPACE/trivy-fs.html
+      #     head -5 $GITHUB_WORKSPACE/trivy-fs.html
 
       - name: Debug paths
         run: |
