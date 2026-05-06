@@ -34,15 +34,13 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Run Trivy FS scan (HTML)
-        uses: aquasecurity/trivy-action@0.35.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          format: template
-          template: "contrib/html.tpl"
-          output: trivy-fs.html
-          severity: HIGH,CRITICAL
-          skip-version-check: true
+        run: |
+          trivy fs . \
+            --format template \
+            --template "@html.tpl" \
+            --output trivy-fs.html \
+            --severity HIGH,CRITICAL \
+            --skip-version-check
 
       - name: Debug HTML output
         run: |
@@ -175,14 +173,13 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Run Trivy image scan — backend (HTML)
-        uses: aquasecurity/trivy-action@0.35.0
-        with:
-          image-ref: todo-backend
-          format: template
-          template: "contrib/html.tpl" 
-          output: trivy-backend.html
-          severity: HIGH,CRITICAL
-          skip-version-check: true
+        run: |
+          trivy image todo-backend \
+            --format template \
+            --template "@html.tpl" \
+            --output trivy-backend.html \
+            --severity HIGH,CRITICAL \
+            --skip-version-check
 
       - name: Upload backend SARIF
         uses: github/codeql-action/upload-sarif@v4
@@ -220,15 +217,13 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Run Trivy image scan — frontend (HTML)
-        uses: aquasecurity/trivy-action@0.35.0
-        with:
-          image-ref: todo-frontend
-          format: template
-          template: "contrib/html.tpl"
-          output: trivy-frontend.html
-          severity: HIGH,CRITICAL
-          skip-version-check: true
-
+        run: |
+          trivy image todo-frontend \
+            --format template \
+            --template "@html.tpl" \
+            --output trivy-frontend.html \
+            --severity HIGH,CRITICAL \
+            --skip-version-check
       - name: Upload frontend SARIF
         uses: github/codeql-action/upload-sarif@v4
         with:
