@@ -42,6 +42,7 @@ jobs:
           template: "contrib/html.tpl"
           output: trivy-fs.html
           severity: HIGH,CRITICAL
+          skip-version-check: true
 
       - name: Upload FS scan result (SARIF)
         uses: github/codeql-action/upload-sarif@v4
@@ -174,6 +175,7 @@ jobs:
           template: "contrib/html.tpl" 
           output: trivy-backend.html
           severity: HIGH,CRITICAL
+          skip-version-check: true
 
       - name: Upload backend SARIF
         uses: github/codeql-action/upload-sarif@v4
@@ -218,6 +220,7 @@ jobs:
           template: "contrib/html.tpl"
           output: trivy-frontend.html
           severity: HIGH,CRITICAL
+          skip-version-check: true
 
       - name: Upload frontend SARIF
         uses: github/codeql-action/upload-sarif@v4
@@ -264,7 +267,7 @@ jobs:
 
       - name: Convert SARIF → HTML (CodeQL + Semgrep)
         run: |
-        
+
       - name: Build combined report
         run: |
           cat << 'EOF' > combine.py
