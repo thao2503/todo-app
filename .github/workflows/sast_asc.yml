@@ -20,9 +20,10 @@ jobs:
 
       - name: Download Trivy HTML template
         run: |
-          mkdir -p contrib
           curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl \
-            -o contrib/html.tpl
+            -o $GITHUB_WORKSPACE/html.tpl
+          echo "Template path: $GITHUB_WORKSPACE/html.tpl"
+          ls -la $GITHUB_WORKSPACE/html.tpl
 
       - name: Run Trivy FS scan (SARIF)
         uses: aquasecurity/trivy-action@0.35.0
@@ -41,6 +42,9 @@ jobs:
             --output trivy-fs.html \
             --severity HIGH,CRITICAL \
             --skip-version-check
+          echo "=== Output ==="
+          ls -la $GITHUB_WORKSPACE/trivy-fs.html
+          head -5 $GITHUB_WORKSPACE/trivy-fs.html
 
       - name: Debug HTML output
         run: |
@@ -180,6 +184,9 @@ jobs:
             --output trivy-backend.html \
             --severity HIGH,CRITICAL \
             --skip-version-check
+          echo "=== Output ==="
+          ls -la $GITHUB_WORKSPACE/trivy-fs.html
+          head -5 $GITHUB_WORKSPACE/trivy-fs.html
 
       - name: Upload backend SARIF
         uses: github/codeql-action/upload-sarif@v4
@@ -224,6 +231,9 @@ jobs:
             --output trivy-frontend.html \
             --severity HIGH,CRITICAL \
             --skip-version-check
+          echo "=== Output ==="
+          ls -la $GITHUB_WORKSPACE/trivy-fs.html
+          head -5 $GITHUB_WORKSPACE/trivy-fs.html
       - name: Upload frontend SARIF
         uses: github/codeql-action/upload-sarif@v4
         with:
