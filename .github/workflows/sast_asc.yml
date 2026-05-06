@@ -25,7 +25,7 @@ jobs:
             -o contrib/html.tpl
 
       - name: Run Trivy FS scan (SARIF)
-        uses: aquasecurity/trivy-action@0.70.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: fs
           scan-ref: .
@@ -34,7 +34,7 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Run Trivy FS scan (HTML)
-        uses: aquasecurity/trivy-action@0.70.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: fs
           scan-ref: .
@@ -159,7 +159,7 @@ jobs:
         run: docker build -t todo-backend ./backend
 
       - name: Run Trivy image scan — backend (SARIF)
-        uses: aquasecurity/trivy-action@0.70.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: todo-backend
           format: sarif
@@ -167,7 +167,7 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Run Trivy image scan — backend (HTML)
-        uses: aquasecurity/trivy-action@0.70.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: todo-backend
           format: template
@@ -203,7 +203,7 @@ jobs:
             --build-arg VITE_GA_MEASUREMENT_ID=
 
       - name: Run Trivy image scan — frontend (SARIF)
-        uses: aquasecurity/trivy-action@0.70.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: todo-frontend
           format: sarif
@@ -211,7 +211,7 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Run Trivy image scan — frontend (HTML)
-        uses: aquasecurity/trivy-action@0.70.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: todo-frontend
           format: template
