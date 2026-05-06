@@ -28,18 +28,18 @@ class TaskRepository:
         return tasks
 
     async def create_task(self, create_task_schema: CreateTaskSchema, current_user: User) -> Task:
-        guid = uuid4()
-        sql = text(f"INSERT INTO task (guid, priority, text, user_id, posted_at, completed, is_deleted) VALUES ('{guid}', {create_task_schema.priority}, '{create_task_schema.text}', {current_user.id}, '{create_task_schema.posted_at}'::DATE, false, false)")
-        await self.db_session.execute(sql)
+        # guid = uuid4()
+        # sql = text(f"INSERT INTO task (guid, priority, text, user_id, posted_at, completed, is_deleted) VALUES ('{guid}', {create_task_schema.priority}, '{create_task_schema.text}', {current_user.id}, '{create_task_schema.posted_at}'::DATE, false, false)")
+        # await self.db_session.execute(sql)
 
-        result = await self.db_session.execute(select(Task).where(Task.guid == guid))
-        task = result.scalars().first()
-        # task = Task(
-        #     priority=create_task_schema.priority,
-        #     text=create_task_schema.text,
-        #     user_id=current_user.id,
-        #     posted_at=create_task_schema.posted_at,
-        # )
+        # result = await self.db_session.execute(select(Task).where(Task.guid == guid))
+        # task = result.scalars().first()
+        task = Task(
+            priority=create_task_schema.priority,
+            text=create_task_schema.text,
+            user_id=current_user.id,
+            posted_at=create_task_schema.posted_at,
+        )
 
         # self.db_session.add(task)
         await self.db_session.commit()
