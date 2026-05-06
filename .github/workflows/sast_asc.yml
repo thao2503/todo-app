@@ -188,6 +188,23 @@ jobs:
           ls -la $GITHUB_WORKSPACE/trivy-fs.html
           head -5 $GITHUB_WORKSPACE/trivy-fs.html
 
+      - name: Debug paths
+        run: |
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          echo "PWD=$(pwd)"
+          echo "Template exists:"
+          ls -la $GITHUB_WORKSPACE/html.tpl
+          echo "Trivy version:"
+          trivy --version
+          echo "Running trivy with verbose:"
+          trivy fs . \
+            --format template \
+            --template "@$GITHUB_WORKSPACE/html.tpl" \
+            --output /tmp/trivy-fs.html \
+            --severity HIGH,CRITICAL \
+            --skip-version-check \
+            --debug 2>&1 | head -30
+
       - name: Upload backend SARIF
         uses: github/codeql-action/upload-sarif@v4
         with:
