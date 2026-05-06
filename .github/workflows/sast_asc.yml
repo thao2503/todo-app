@@ -44,6 +44,13 @@ jobs:
           severity: HIGH,CRITICAL
           skip-version-check: true
 
+      - name: Debug HTML output
+        run: |
+          echo "=== Output file size ==="
+          ls -la trivy-fs.html
+          echo "=== First 20 lines ==="
+          head -20 trivy-fs.html
+
       - name: Upload FS scan result (SARIF)
         uses: github/codeql-action/upload-sarif@v4
         with:
