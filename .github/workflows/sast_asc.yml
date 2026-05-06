@@ -32,8 +32,7 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
-          format: template
-          template: "@contrib/html.tpl"
+          format: html
           output: trivy-fs.html
           severity: HIGH,CRITICAL
 
@@ -164,8 +163,7 @@ jobs:
         uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: todo-backend
-          format: template
-          template: "@contrib/html.tpl"
+          format: html
           output: trivy-backend.html
           severity: HIGH,CRITICAL
 
@@ -208,8 +206,7 @@ jobs:
         uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: todo-frontend
-          format: template
-          template: "@contrib/html.tpl"
+          format: html
           output: trivy-frontend.html
           severity: HIGH,CRITICAL
 
