@@ -18,8 +18,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Download Trivy HTML template
+        run: |
+          mkdir -p contrib
+          curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl \
+            -o contrib/html.tpl
+
       - name: Run Trivy FS scan (SARIF)
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@0.70.0
         with:
           scan-type: fs
           scan-ref: .
@@ -28,11 +34,12 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Run Trivy FS scan (HTML)
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@0.70.0
         with:
           scan-type: fs
           scan-ref: .
-          format: html
+          format: template
+          template: "contrib/html.tpl"
           output: trivy-fs.html
           severity: HIGH,CRITICAL
 
@@ -152,7 +159,7 @@ jobs:
         run: docker build -t todo-backend ./backend
 
       - name: Run Trivy image scan — backend (SARIF)
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@0.70.0
         with:
           image-ref: todo-backend
           format: sarif
@@ -160,10 +167,11 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Run Trivy image scan — backend (HTML)
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@0.70.0
         with:
           image-ref: todo-backend
-          format: html
+          format: template
+          template: "contrib/html.tpl" 
           output: trivy-backend.html
           severity: HIGH,CRITICAL
 
@@ -195,7 +203,7 @@ jobs:
             --build-arg VITE_GA_MEASUREMENT_ID=
 
       - name: Run Trivy image scan — frontend (SARIF)
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@0.70.0
         with:
           image-ref: todo-frontend
           format: sarif
@@ -203,10 +211,11 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Run Trivy image scan — frontend (HTML)
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@0.70.0
         with:
           image-ref: todo-frontend
-          format: html
+          format: template
+          template: "contrib/html.tpl"
           output: trivy-frontend.html
           severity: HIGH,CRITICAL
 
