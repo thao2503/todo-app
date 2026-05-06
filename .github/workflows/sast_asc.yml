@@ -18,14 +18,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Trivy HTML template
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl \
-            -o $GITHUB_WORKSPACE/html.tpl
-          echo "Exit code: $?"
-          ls -la $GITHUB_WORKSPACE/html.tpl
-          head -3 $GITHUB_WORKSPACE/html.tpl
-
       - name: Run Trivy FS scan (SARIF)
         uses: aquasecurity/trivy-action@0.35.0
         with:
@@ -34,25 +26,100 @@ jobs:
           format: sarif
           output: trivy-fs.sarif
           severity: HIGH,CRITICAL
+          skip-version-check: true
 
-      - name: Run Trivy FS scan (HTML)
-        run: |
-          trivy fs . \
-            --format template \
-            --template "@html.tpl" \
-            --output trivy-fs.html \
-            --severity HIGH,CRITICAL \
-            --skip-version-check
-          echo "=== Output ==="
-          ls -la $GITHUB_WORKSPACE/trivy-fs.html
-          head -5 $GITHUB_WORKSPACE/trivy-fs.html
+      - name: Run Trivy FS scan (JSON)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: json
+          output: trivy-fs.json
+          severity: HIGH,CRITICAL
+          skip-version-check: true
 
-      - name: Debug HTML output
+      - name: Convert Trivy JSON → HTML
         run: |
-          echo "=== Output file size ==="
-          ls -la trivy-fs.html
-          echo "=== First 20 lines ==="
-          head -20 trivy-fs.html
+          python3 << 'PYEOF'
+          import json, glob
+
+          def convert(input_file, output_file, title):
+            try:
+              data = json.load(open(input_file))
+            except:
+              data = {}
+
+            results = data.get("Results", [])
+            all_vulns = []
+            for r in results:
+              target = r.get("Target", "")
+              for v in r.get("Vulnerabilities") or []:
+                v["_target"] = target
+                all_vulns.append(v)
+
+            sev_color = {
+              "CRITICAL": "#7c0000", "HIGH": "#c0392b",
+              "MEDIUM": "#e67e22", "LOW": "#2980b9", "UNKNOWN": "#7f8c8d"
+            }
+            sev_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "UNKNOWN": 4}
+            all_vulns.sort(key=lambda x: sev_order.get(x.get("Severity", "UNKNOWN"), 9))
+
+            critical = sum(1 for v in all_vulns if v.get("Severity") == "CRITICAL")
+            high = sum(1 for v in all_vulns if v.get("Severity") == "HIGH")
+
+            rows = ""
+            for v in all_vulns:
+              sev = v.get("Severity", "UNKNOWN")
+              color = sev_color.get(sev, "#7f8c8d")
+              url = v.get("PrimaryURL", "#")
+              vid = v.get("VulnerabilityID", "")
+              rows += f"""<tr>
+                <td><code>{v.get('_target','')}</code></td>
+                <td><code>{v.get('PkgName','')}</code></td>
+                <td><a href="{url}" target="_blank">{vid}</a></td>
+                <td><span style="background:{color};color:white;padding:2px 8px;border-radius:3px;font-size:.75rem">{sev}</span></td>
+                <td>{v.get('InstalledVersion','')}</td>
+                <td>{v.get('FixedVersion','')}</td>
+                <td style="max-width:300px">{v.get('Title','')}</td>
+              </tr>"""
+
+            no_vuln = '<p style="color:#27ae60;font-size:1rem">&#10003; No vulnerabilities found.</p>'
+            table = f"""<table>
+              <thead><tr><th>Target</th><th>Package</th><th>CVE</th><th>Severity</th><th>Installed</th><th>Fixed</th><th>Title</th></tr></thead>
+              <tbody>{rows}</tbody>
+            </table>""" if all_vulns else no_vuln
+
+            html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+            <title>{title}</title>
+            <style>
+              body{{font-family:sans-serif;padding:24px;background:#fafafa;margin:0}}
+              h2{{color:#1a1a2e}}
+              .stats{{display:flex;gap:16px;margin-bottom:24px}}
+              .stat{{background:white;border-radius:8px;padding:16px 24px;box-shadow:0 1px 4px rgba(0,0,0,.1)}}
+              .stat .num{{font-size:2rem;font-weight:bold}}
+              .stat .label{{color:#888;font-size:.85rem}}
+              table{{width:100%;border-collapse:collapse;background:white;box-shadow:0 1px 4px rgba(0,0,0,.1);border-radius:8px;overflow:hidden}}
+              th{{background:#1a1a2e;color:white;padding:10px 14px;text-align:left;font-size:.85rem}}
+              td{{padding:10px 14px;border-bottom:1px solid #eee;font-size:.85rem;vertical-align:top}}
+              tr:last-child td{{border-bottom:none}}
+              tr:hover td{{background:#f5f5f5}}
+              a{{color:#0f3460}}
+            </style>
+            </head><body>
+            <h2>{title}</h2>
+            <div class="stats">
+              <div class="stat"><div class="num">{len(all_vulns)}</div><div class="label">Total</div></div>
+              <div class="stat"><div class="num" style="color:#7c0000">{critical}</div><div class="label">Critical</div></div>
+              <div class="stat"><div class="num" style="color:#c0392b">{high}</div><div class="label">High</div></div>
+            </div>
+            {table}
+            </body></html>"""
+
+            open(output_file, "w").write(html)
+            print(f"{output_file}: {len(all_vulns)} findings ({critical} critical, {high} high)")
+
+          convert("trivy-fs.json", "trivy-fs.html", "Trivy FS Scan")
+          PYEOF
 
       - name: Upload FS scan result (SARIF)
         uses: github/codeql-action/upload-sarif@v4
@@ -176,35 +243,99 @@ jobs:
           format: sarif
           output: trivy-backend.sarif
           severity: HIGH,CRITICAL
+          skip-version-check: true
 
-      - name: Run Trivy image scan — backend (HTML)
+      - name: Run Trivy image scan — backend (JSON)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: todo-backend
+          format: json
+          output: trivy-backend.json
+          severity: HIGH,CRITICAL
+          skip-version-check: true
+
+      - name: Convert Trivy JSON → HTML
         run: |
-          trivy image todo-backend \
-            --format template \
-            --template "@html.tpl" \
-            --output trivy-backend.html \
-            --severity HIGH,CRITICAL \
-            --skip-version-check
-          echo "=== Output ==="
-          ls -la $GITHUB_WORKSPACE/trivy-fs.html
-          head -5 $GITHUB_WORKSPACE/trivy-fs.html
+          python3 << 'PYEOF'
+          import json
 
-      # - name: Debug paths
-      #   run: |
-      #     echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
-      #     echo "PWD=$(pwd)"
-      #     echo "Template exists:"
-      #     ls -la $GITHUB_WORKSPACE/html.tpl
-      #     echo "Trivy version:"
-      #     trivy --version
-      #     echo "Running trivy with verbose:"
-      #     trivy fs . \
-      #       --format template \
-      #       --template "@$GITHUB_WORKSPACE/html.tpl" \
-      #       --output /tmp/trivy-fs.html \
-      #       --severity HIGH,CRITICAL \
-      #       --skip-version-check \
-      #       --debug 2>&1 | head -30
+          def convert(input_file, output_file, title):
+            try:
+              data = json.load(open(input_file))
+            except:
+              data = {}
+
+            results = data.get("Results", [])
+            all_vulns = []
+            for r in results:
+              target = r.get("Target", "")
+              for v in r.get("Vulnerabilities") or []:
+                v["_target"] = target
+                all_vulns.append(v)
+
+            sev_color = {
+              "CRITICAL": "#7c0000", "HIGH": "#c0392b",
+              "MEDIUM": "#e67e22", "LOW": "#2980b9", "UNKNOWN": "#7f8c8d"
+            }
+            sev_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "UNKNOWN": 4}
+            all_vulns.sort(key=lambda x: sev_order.get(x.get("Severity", "UNKNOWN"), 9))
+
+            critical = sum(1 for v in all_vulns if v.get("Severity") == "CRITICAL")
+            high = sum(1 for v in all_vulns if v.get("Severity") == "HIGH")
+
+            rows = ""
+            for v in all_vulns:
+              sev = v.get("Severity", "UNKNOWN")
+              color = sev_color.get(sev, "#7f8c8d")
+              url = v.get("PrimaryURL", "#")
+              vid = v.get("VulnerabilityID", "")
+              rows += f"""<tr>
+                <td><code>{v.get('_target','')}</code></td>
+                <td><code>{v.get('PkgName','')}</code></td>
+                <td><a href="{url}" target="_blank">{vid}</a></td>
+                <td><span style="background:{color};color:white;padding:2px 8px;border-radius:3px;font-size:.75rem">{sev}</span></td>
+                <td>{v.get('InstalledVersion','')}</td>
+                <td>{v.get('FixedVersion','')}</td>
+                <td style="max-width:300px">{v.get('Title','')}</td>
+              </tr>"""
+
+            no_vuln = '<p style="color:#27ae60;font-size:1rem">&#10003; No vulnerabilities found.</p>'
+            table = f"""<table>
+              <thead><tr><th>Target</th><th>Package</th><th>CVE</th><th>Severity</th><th>Installed</th><th>Fixed</th><th>Title</th></tr></thead>
+              <tbody>{rows}</tbody>
+            </table>""" if all_vulns else no_vuln
+
+            html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+            <title>{title}</title>
+            <style>
+              body{{font-family:sans-serif;padding:24px;background:#fafafa;margin:0}}
+              h2{{color:#1a1a2e}}
+              .stats{{display:flex;gap:16px;margin-bottom:24px}}
+              .stat{{background:white;border-radius:8px;padding:16px 24px;box-shadow:0 1px 4px rgba(0,0,0,.1)}}
+              .stat .num{{font-size:2rem;font-weight:bold}}
+              .stat .label{{color:#888;font-size:.85rem}}
+              table{{width:100%;border-collapse:collapse;background:white;box-shadow:0 1px 4px rgba(0,0,0,.1);border-radius:8px;overflow:hidden}}
+              th{{background:#1a1a2e;color:white;padding:10px 14px;text-align:left;font-size:.85rem}}
+              td{{padding:10px 14px;border-bottom:1px solid #eee;font-size:.85rem;vertical-align:top}}
+              tr:last-child td{{border-bottom:none}}
+              tr:hover td{{background:#f5f5f5}}
+              a{{color:#0f3460}}
+            </style>
+            </head><body>
+            <h2>{title}</h2>
+            <div class="stats">
+              <div class="stat"><div class="num">{len(all_vulns)}</div><div class="label">Total</div></div>
+              <div class="stat"><div class="num" style="color:#7c0000">{critical}</div><div class="label">Critical</div></div>
+              <div class="stat"><div class="num" style="color:#c0392b">{high}</div><div class="label">High</div></div>
+            </div>
+            {table}
+            </body></html>"""
+
+            open(output_file, "w").write(html)
+            print(f"{output_file}: {len(all_vulns)} findings ({critical} critical, {high} high)")
+
+          convert("trivy-backend.json", "trivy-backend.html", "Trivy Backend Image Scan")
+          PYEOF
 
       - name: Upload backend SARIF
         uses: github/codeql-action/upload-sarif@v4
@@ -240,18 +371,100 @@ jobs:
           format: sarif
           output: trivy-frontend.sarif
           severity: HIGH,CRITICAL
+          skip-version-check: true
 
-      - name: Run Trivy image scan — frontend (HTML)
+      - name: Run Trivy image scan — frontend (JSON)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: todo-frontend
+          format: json
+          output: trivy-frontend.json
+          severity: HIGH,CRITICAL
+          skip-version-check: true
+
+      - name: Convert Trivy JSON → HTML
         run: |
-          trivy image todo-frontend \
-            --format template \
-            --template "@html.tpl" \
-            --output trivy-frontend.html \
-            --severity HIGH,CRITICAL \
-            --skip-version-check
-          echo "=== Output ==="
-          ls -la $GITHUB_WORKSPACE/trivy-fs.html
-          head -5 $GITHUB_WORKSPACE/trivy-fs.html
+          python3 << 'PYEOF'
+          import json
+
+          def convert(input_file, output_file, title):
+            try:
+              data = json.load(open(input_file))
+            except:
+              data = {}
+
+            results = data.get("Results", [])
+            all_vulns = []
+            for r in results:
+              target = r.get("Target", "")
+              for v in r.get("Vulnerabilities") or []:
+                v["_target"] = target
+                all_vulns.append(v)
+
+            sev_color = {
+              "CRITICAL": "#7c0000", "HIGH": "#c0392b",
+              "MEDIUM": "#e67e22", "LOW": "#2980b9", "UNKNOWN": "#7f8c8d"
+            }
+            sev_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "UNKNOWN": 4}
+            all_vulns.sort(key=lambda x: sev_order.get(x.get("Severity", "UNKNOWN"), 9))
+
+            critical = sum(1 for v in all_vulns if v.get("Severity") == "CRITICAL")
+            high = sum(1 for v in all_vulns if v.get("Severity") == "HIGH")
+
+            rows = ""
+            for v in all_vulns:
+              sev = v.get("Severity", "UNKNOWN")
+              color = sev_color.get(sev, "#7f8c8d")
+              url = v.get("PrimaryURL", "#")
+              vid = v.get("VulnerabilityID", "")
+              rows += f"""<tr>
+                <td><code>{v.get('_target','')}</code></td>
+                <td><code>{v.get('PkgName','')}</code></td>
+                <td><a href="{url}" target="_blank">{vid}</a></td>
+                <td><span style="background:{color};color:white;padding:2px 8px;border-radius:3px;font-size:.75rem">{sev}</span></td>
+                <td>{v.get('InstalledVersion','')}</td>
+                <td>{v.get('FixedVersion','')}</td>
+                <td style="max-width:300px">{v.get('Title','')}</td>
+              </tr>"""
+
+            no_vuln = '<p style="color:#27ae60;font-size:1rem">&#10003; No vulnerabilities found.</p>'
+            table = f"""<table>
+              <thead><tr><th>Target</th><th>Package</th><th>CVE</th><th>Severity</th><th>Installed</th><th>Fixed</th><th>Title</th></tr></thead>
+              <tbody>{rows}</tbody>
+            </table>""" if all_vulns else no_vuln
+
+            html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+            <title>{title}</title>
+            <style>
+              body{{font-family:sans-serif;padding:24px;background:#fafafa;margin:0}}
+              h2{{color:#1a1a2e}}
+              .stats{{display:flex;gap:16px;margin-bottom:24px}}
+              .stat{{background:white;border-radius:8px;padding:16px 24px;box-shadow:0 1px 4px rgba(0,0,0,.1)}}
+              .stat .num{{font-size:2rem;font-weight:bold}}
+              .stat .label{{color:#888;font-size:.85rem}}
+              table{{width:100%;border-collapse:collapse;background:white;box-shadow:0 1px 4px rgba(0,0,0,.1);border-radius:8px;overflow:hidden}}
+              th{{background:#1a1a2e;color:white;padding:10px 14px;text-align:left;font-size:.85rem}}
+              td{{padding:10px 14px;border-bottom:1px solid #eee;font-size:.85rem;vertical-align:top}}
+              tr:last-child td{{border-bottom:none}}
+              tr:hover td{{background:#f5f5f5}}
+              a{{color:#0f3460}}
+            </style>
+            </head><body>
+            <h2>{title}</h2>
+            <div class="stats">
+              <div class="stat"><div class="num">{len(all_vulns)}</div><div class="label">Total</div></div>
+              <div class="stat"><div class="num" style="color:#7c0000">{critical}</div><div class="label">Critical</div></div>
+              <div class="stat"><div class="num" style="color:#c0392b">{high}</div><div class="label">High</div></div>
+            </div>
+            {table}
+            </body></html>"""
+
+            open(output_file, "w").write(html)
+            print(f"{output_file}: {len(all_vulns)} findings ({critical} critical, {high} high)")
+
+          convert("trivy-frontend.json", "trivy-frontend.html", "Trivy Frontend Image Scan")
+          PYEOF
+
       - name: Upload frontend SARIF
         uses: github/codeql-action/upload-sarif@v4
         with:
@@ -265,7 +478,6 @@ jobs:
           path: trivy-frontend.html
           retention-days: 30
 
-  # report for FS scan (codebase) is generated in the scan-code job since it can be combined with CodeQL + Semgrep results
   generate-report:
     name: Generate Combined HTML Report
     runs-on: ubuntu-latest
@@ -292,27 +504,115 @@ jobs:
           merge-multiple: true
           path: trivy-reports/
 
-      - name: Install sarif-tools
-        run: pip install sarif-tools
-
       - name: Convert SARIF → HTML (CodeQL + Semgrep)
         run: |
+          python3 << 'PYEOF'
+          import json, glob, os
+
+          findings = []
+
+          for sarif_file in glob.glob("sarif-files/*.sarif"):
+            source = os.path.basename(sarif_file).replace(".sarif", "")
+            try:
+              data = json.load(open(sarif_file))
+              for run in data.get("runs", []):
+                tool = run.get("tool", {}).get("driver", {}).get("name", source)
+                rules = {r["id"]: r for r in run.get("tool", {}).get("driver", {}).get("rules", [])}
+                for result in run.get("results", []):
+                  rule_id = result.get("ruleId", "N/A")
+                  rule = rules.get(rule_id, {})
+                  severity = result.get("properties", {}).get("problem.severity") \
+                          or rule.get("properties", {}).get("problem.severity", "unknown")
+                  message = result.get("message", {}).get("text", "")
+                  locations = result.get("locations", [])
+                  loc_str = ""
+                  if locations:
+                    pl = locations[0].get("physicalLocation", {})
+                    uri = pl.get("artifactLocation", {}).get("uri", "")
+                    line = pl.get("region", {}).get("startLine", "")
+                    loc_str = f"{uri}:{line}" if line else uri
+                  findings.append({
+                    "tool": tool,
+                    "rule_id": rule_id,
+                    "severity": severity.upper(),
+                    "message": message[:200],
+                    "location": loc_str,
+                  })
+            except Exception as e:
+              print(f"Warning: could not parse {sarif_file}: {e}")
+
+          sev_order = {"CRITICAL": 0, "HIGH": 1, "ERROR": 1, "MEDIUM": 2, "WARNING": 2, "LOW": 3, "UNKNOWN": 4}
+          findings.sort(key=lambda x: sev_order.get(x["severity"], 9))
+
+          sev_color = {
+            "CRITICAL": "#7c0000", "HIGH": "#c0392b", "ERROR": "#c0392b",
+            "MEDIUM": "#e67e22", "WARNING": "#e67e22",
+            "LOW": "#2980b9", "UNKNOWN": "#7f8c8d"
+          }
+
+          rows = ""
+          for f in findings:
+            color = sev_color.get(f["severity"], "#7f8c8d")
+            rows += f"""<tr>
+              <td><code style="font-size:0.8rem">{f['tool']}</code></td>
+              <td><span style="background:{color};color:white;padding:2px 8px;border-radius:3px;font-size:0.75rem">{f['severity']}</span></td>
+              <td><code style="font-size:0.8rem">{f['rule_id']}</code></td>
+              <td style="max-width:400px;font-size:0.85rem">{f['message']}</td>
+              <td><code style="font-size:0.75rem;color:#555">{f['location']}</code></td>
+            </tr>"""
+
+          total = len(findings)
+          critical = sum(1 for f in findings if f["severity"] == "CRITICAL")
+          high = sum(1 for f in findings if f["severity"] in ("HIGH", "ERROR"))
+
+          no_vuln = '<p style="color:#27ae60">&#10003; No findings detected.</p>'
+          table = f"""<table>
+            <thead><tr><th>Tool</th><th>Severity</th><th>Rule</th><th>Message</th><th>Location</th></tr></thead>
+            <tbody>{rows}</tbody>
+          </table>""" if findings else no_vuln
+
+          html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+          <title>SAST Report</title>
+          <style>
+            body{{font-family:sans-serif;padding:24px;background:#fafafa}}
+            h2{{color:#1a1a2e}}
+            .stats{{display:flex;gap:16px;margin-bottom:24px}}
+            .stat{{background:white;border-radius:8px;padding:16px 24px;box-shadow:0 1px 4px rgba(0,0,0,.1)}}
+            .stat .num{{font-size:2rem;font-weight:bold}}
+            .stat .label{{color:#888;font-size:.85rem}}
+            table{{width:100%;border-collapse:collapse;background:white;box-shadow:0 1px 4px rgba(0,0,0,.1);border-radius:8px;overflow:hidden}}
+            th{{background:#1a1a2e;color:white;padding:10px 14px;text-align:left;font-size:.85rem}}
+            td{{padding:10px 14px;border-bottom:1px solid #eee;vertical-align:top}}
+            tr:last-child td{{border-bottom:none}}
+            tr:hover td{{background:#f5f5f5}}
+          </style>
+          </head><body>
+          <h2>SAST Report — CodeQL + Semgrep</h2>
+          <div class="stats">
+            <div class="stat"><div class="num">{total}</div><div class="label">Total findings</div></div>
+            <div class="stat"><div class="num" style="color:#7c0000">{critical}</div><div class="label">Critical</div></div>
+            <div class="stat"><div class="num" style="color:#c0392b">{high}</div><div class="label">High / Error</div></div>
+          </div>
+          {table}
+          </body></html>"""
+
+          open("sarif-summary.html", "w").write(html)
+          print(f"Done: {total} findings ({critical} critical, {high} high)")
+          PYEOF
 
       - name: Build combined report
         run: |
-          cat << 'EOF' > combine.py
+          python3 << 'PYEOF'
           import os, glob, datetime
 
           pages = {}
 
-          # Trivy HTML files
-          for f in glob.glob("trivy-reports/*.html"):
+          for f in sorted(glob.glob("trivy-reports/*.html")):
             name = os.path.basename(f).replace(".html", "").replace("trivy-", "Trivy: ")
             pages[name] = open(f).read()
 
-          # SARIF summary
           if os.path.exists("sarif-summary.html"):
-            pages["SAST Summary (CodeQL + Semgrep)"] = open("sarif-summary.html").read()
+            pages["SAST (CodeQL + Semgrep)"] = open("sarif-summary.html").read()
 
           now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
@@ -344,7 +644,7 @@ jobs:
           </head>
           <body>
             <header>
-              <h1>🔐 Security Scan Report</h1>
+              <h1>&#128274; Security Scan Report</h1>
               <small>Generated: {now}</small>
             </header>
             <div class="tabs">{tabs_nav}</div>
@@ -362,8 +662,7 @@ jobs:
 
           open("security-report.html", "w").write(html)
           print("Report generated: security-report.html")
-          EOF
-          python combine.py
+          PYEOF
 
       - name: Upload combined report
         uses: actions/upload-artifact@v4
