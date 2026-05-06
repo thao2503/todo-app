@@ -264,8 +264,7 @@ jobs:
 
       - name: Convert SARIF → HTML (CodeQL + Semgrep)
         run: |
-          sarif summary sarif-files/ --output sarif-summary.html
-
+        
       - name: Build combined report
         run: |
           cat << 'EOF' > combine.py
