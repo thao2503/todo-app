@@ -13,7 +13,7 @@ export const options = {
 const rateLimitedRequests = new Counter('rate_limited_requests');
 
 export default function() {
-  const baseUrl = __ENV.BASE_URL || 'http://localhost:5173';
+  const baseUrl = __ENV.BASE_URL || 'http://localhost';
   const username = __ENV.USERNAME || 'demo';
   const password = __ENV.PASSWORD || 'demo123';
 
